@@ -262,22 +262,43 @@ class PenjualanController extends BaseController
 
                 if (!empty($request->uuid_jasa)) {
 
-                    $uuidJasa = is_array($request->uuid_jasa)
-                        ? $request->uuid_jasa
-                        : json_decode($request->uuid_jasa, true);
+                    $uuidJasa = $request->uuid_jasa;
 
-                    if (!empty($uuidJasa)) {
+                    // Jika JSON → decode
+                    if (is_string($uuidJasa)) {
+                        $uuidJasa = json_decode($uuidJasa, true);
+                    }
 
-                        $counts = array_count_values($uuidJasa);
+                    // Harus array
+                    if (!is_array($uuidJasa)) {
+                        $uuidJasa = [];
+                    }
 
-                        $hargaJasa = DB::table('jasas')
-                            ->whereIn('uuid', array_keys($counts))
-                            ->pluck('harga', 'uuid')
-                            ->toArray();
-
-                        foreach ($counts as $uuid => $qty) {
-                            $totalJasa += ((int)($hargaJasa[$uuid] ?? 0)) * $qty;
+                    // Normalisasi hanya ambil string uuid
+                    $uuidJasa = array_map(function ($item) {
+                        if (is_array($item) && isset($item['uuid'])) {
+                            return $item['uuid'];
                         }
+                        if (is_string($item)) {
+                            return $item;
+                        }
+                        return null;
+                    }, $uuidJasa);
+
+                    // Buang null
+                    $uuidJasa = array_filter($uuidJasa);
+
+                    // Hitung qty tiap jasa
+                    $counts = array_count_values($uuidJasa);
+
+                    // Ambil harga jasa
+                    $hargaJasa = DB::table('jasas')
+                        ->whereIn('uuid', array_keys($counts))
+                        ->pluck('harga', 'uuid')
+                        ->toArray();
+
+                    foreach ($counts as $uuid => $qty) {
+                        $totalJasa += ((int)($hargaJasa[$uuid] ?? 0)) * $qty;
                     }
                 }
 

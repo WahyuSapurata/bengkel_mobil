@@ -156,27 +156,58 @@ class Dashboard extends BaseController
             ')
                 ->first();
 
-            // === Jasa
+            // === Jasa (perbaikan: normalisasi sebelum array_count_values) ===
             $totalJasa = 0;
 
             if (!empty($trx->uuid_jasa)) {
-                // Pastikan uuid_jasa berupa array
-                $uuidJasa = is_array($trx->uuid_jasa)
-                    ? $trx->uuid_jasa
-                    : json_decode($trx->uuid_jasa, true);
+                $uuidJasa = $trx->uuid_jasa;
+
+                // Jika tersimpan sebagai JSON string → decode
+                if (is_string($uuidJasa)) {
+                    $decoded = json_decode($uuidJasa, true);
+                    // jika json_decode gagal, tetap biarkan sebagai string
+                    $uuidJasa = $decoded === null ? [$uuidJasa] : $decoded;
+                }
+
+                // Pastikan array
+                if (!is_array($uuidJasa)) {
+                    $uuidJasa = [$uuidJasa];
+                }
+
+                // Normalisasi elemen:
+                // - jika elemen adalah array dan ada key 'uuid', ambil itu
+                // - jika elemen adalah object (stdClass), ambil ->uuid
+                // - jika elemen adalah string/number, pakai langsung
+                $uuidJasa = array_map(function ($item) {
+                    if (is_array($item) && isset($item['uuid'])) {
+                        return (string) $item['uuid'];
+                    }
+                    if (is_object($item) && isset($item->uuid)) {
+                        return (string) $item->uuid;
+                    }
+                    if (is_string($item) || is_int($item)) {
+                        return (string) $item;
+                    }
+                    return null; // elemen aneh akan disaring
+                }, $uuidJasa);
+
+                // Filter semua null / kosong
+                $uuidJasa = array_values(array_filter($uuidJasa, function ($v) {
+                    return $v !== null && $v !== '';
+                }));
 
                 if (!empty($uuidJasa)) {
-                    // Hitung frekuensi tiap UUID
+                    // Sekarang aman untuk dipakai array_count_values
                     $counts = array_count_values($uuidJasa);
 
-                    // Ambil semua harga jasa
+                    // Ambil harga jasa (pluck menghasilkan Collection / array)
                     $hargaJasa = DB::table('jasas')
                         ->whereIn('uuid', array_keys($counts))
                         ->pluck('harga', 'uuid');
 
-                    // Hitung total harga jasa, termasuk yang UUID-nya sama
                     foreach ($counts as $uuid => $qty) {
-                        $totalJasa += ($hargaJasa[$uuid] ?? 0) * $qty;
+                        $harga = isset($hargaJasa[$uuid]) ? (float) $hargaJasa[$uuid] : 0;
+                        $totalJasa += $harga * $qty;
                     }
                 }
             }
@@ -300,27 +331,58 @@ class Dashboard extends BaseController
             ')
                 ->first();
 
-            // === Jasa
+            // === Jasa (perbaikan: normalisasi sebelum array_count_values) ===
             $totalJasa = 0;
 
             if (!empty($trx->uuid_jasa)) {
-                // Pastikan uuid_jasa berupa array
-                $uuidJasa = is_array($trx->uuid_jasa)
-                    ? $trx->uuid_jasa
-                    : json_decode($trx->uuid_jasa, true);
+                $uuidJasa = $trx->uuid_jasa;
+
+                // Jika tersimpan sebagai JSON string → decode
+                if (is_string($uuidJasa)) {
+                    $decoded = json_decode($uuidJasa, true);
+                    // jika json_decode gagal, tetap biarkan sebagai string
+                    $uuidJasa = $decoded === null ? [$uuidJasa] : $decoded;
+                }
+
+                // Pastikan array
+                if (!is_array($uuidJasa)) {
+                    $uuidJasa = [$uuidJasa];
+                }
+
+                // Normalisasi elemen:
+                // - jika elemen adalah array dan ada key 'uuid', ambil itu
+                // - jika elemen adalah object (stdClass), ambil ->uuid
+                // - jika elemen adalah string/number, pakai langsung
+                $uuidJasa = array_map(function ($item) {
+                    if (is_array($item) && isset($item['uuid'])) {
+                        return (string) $item['uuid'];
+                    }
+                    if (is_object($item) && isset($item->uuid)) {
+                        return (string) $item->uuid;
+                    }
+                    if (is_string($item) || is_int($item)) {
+                        return (string) $item;
+                    }
+                    return null; // elemen aneh akan disaring
+                }, $uuidJasa);
+
+                // Filter semua null / kosong
+                $uuidJasa = array_values(array_filter($uuidJasa, function ($v) {
+                    return $v !== null && $v !== '';
+                }));
 
                 if (!empty($uuidJasa)) {
-                    // Hitung frekuensi tiap UUID
+                    // Sekarang aman untuk dipakai array_count_values
                     $counts = array_count_values($uuidJasa);
 
-                    // Ambil semua harga jasa
+                    // Ambil harga jasa (pluck menghasilkan Collection / array)
                     $hargaJasa = DB::table('jasas')
                         ->whereIn('uuid', array_keys($counts))
                         ->pluck('harga', 'uuid');
 
-                    // Hitung total harga jasa, termasuk yang UUID-nya sama
                     foreach ($counts as $uuid => $qty) {
-                        $totalJasa += ($hargaJasa[$uuid] ?? 0) * $qty;
+                        $harga = isset($hargaJasa[$uuid]) ? (float) $hargaJasa[$uuid] : 0;
+                        $totalJasa += $harga * $qty;
                     }
                 }
             }
