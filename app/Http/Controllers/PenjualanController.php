@@ -20,6 +20,7 @@ use App\Models\WirehouseStock;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Barryvdh\Snappy\Facades\SnappyPdf as PDF;
 
 class PenjualanController extends BaseController
 {
@@ -180,6 +181,7 @@ class PenjualanController extends BaseController
                     'no_bukti'          => $no_bukti,
                     'tanggal_transaksi' => now()->format('d-m-Y'),
                     'pembayaran'        => $request->pembayaran,
+                    'discount'        => $request->discount,
                 ]);
 
                 // costumer (opsional)
@@ -197,7 +199,6 @@ class PenjualanController extends BaseController
                 $grandTotal = 0;
                 $totalSparepart = 0;
                 $totalHpp = 0;
-                $totalJasa = 0;
 
                 if (!empty($request->uuid_produk) && is_array($request->uuid_produk)) {
                     // Simpan detail & kurangi stok
@@ -302,6 +303,28 @@ class PenjualanController extends BaseController
                     }
                 }
 
+                // =======================
+                //   HITUNG DISCOUNT
+                // =======================
+                $discount = $request->discount;  // "10%" atau "5000"
+                $discountFinal = 0;
+
+                if ($discount) {
+
+                    if (str_contains($discount, '%')) {
+                        $persen = (int) str_replace('%', '', $discount);
+                        $discountFinal = round($totalJasa * ($persen / 100));
+                    } else {
+                        $discountFinal = (int) preg_replace('/\D/', '', $discount);
+                    }
+
+                    if ($discountFinal > $totalJasa) {
+                        $discountFinal = $totalJasa;
+                    }
+                }
+
+                $totalJasaSetelahDiskon = $totalJasa - $discountFinal;
+
                 if ($request->pembayaran === 'Tunai') {
                     $akunDebit   = Coa::where('nama', 'Kas')->firstOrFail();
                     $judulJurnal = 'Penjualan Cash';
@@ -310,7 +333,7 @@ class PenjualanController extends BaseController
                     $judulJurnal = 'Penjualan Transfer';
                 }
 
-                $grandTotal = $totalSparepart + $totalJasa;
+                $grandTotal = $totalSparepart + $totalJasaSetelahDiskon;
 
                 // === Format entries ===
                 $entries = [];
@@ -323,11 +346,11 @@ class PenjualanController extends BaseController
                 ];
 
                 // 2. Kredit pendapatan jasa
-                if ($totalJasa > 0) {
+                if ($totalJasaSetelahDiskon > 0) {
                     $entries[] = [
                         'uuid_coa' => $penjualanJasa->uuid,
                         'jenis'    => 'kredit',
-                        'nominal'  => $totalJasa,
+                        'nominal'  => $totalJasaSetelahDiskon,
                     ];
                 }
 
@@ -367,6 +390,53 @@ class PenjualanController extends BaseController
                 );
             });
 
+            $costumer = Costumer::where('uuid_penjualan', $penjualan['uuid'])->first();
+
+            $daftarJasa = [];
+
+            if (!empty($penjualan->uuid_jasa)) {
+
+                // Decode JSON → dapat array UUID
+                $jasaUUIDs = is_array($penjualan->uuid_jasa)
+                    ? $penjualan->uuid_jasa
+                    : json_decode($penjualan->uuid_jasa, true);
+
+                // Normalisasi
+                $jasaUUIDs = array_map(function ($item) {
+                    return is_array($item) ? ($item['uuid'] ?? null) : $item;
+                }, $jasaUUIDs);
+
+                $jasaUUIDs = array_filter($jasaUUIDs);
+
+                // Hitung qty setiap UUID
+                $counts = array_count_values($jasaUUIDs);
+
+                // Ambil data jasa unik
+                $dataJasa = Jasa::whereIn('uuid', array_keys($counts))
+                    ->select('uuid', 'nama', 'harga')
+                    ->get();
+
+                // Gabungkan harga + qty + subtotal
+                $daftarJasa = $dataJasa->map(function ($j) use ($counts) {
+                    return [
+                        'uuid'     => $j->uuid,
+                        'nama'     => $j->nama,
+                        'harga'    => $j->harga,
+                        'qty'      => $counts[$j->uuid],               // qty berdasarkan duplikasi
+                        'subtotal' => $j->harga * $counts[$j->uuid],   // subtotal × qty
+                    ];
+                });
+            }
+
+            // ===============================
+            // HITUNG TOTAL PRODUK & TOTAL JASA
+            // ===============================
+            $totalProduk = collect($details)->sum('subtotal');
+            $totalJasa   = collect($daftarJasa)->sum('subtotal');
+
+            // Grand total = produk + jasa
+            $grandTotal = $totalProduk + $totalJasa;
+
             return response()->json([
                 'status'  => 'success',
                 'message' => 'Transaksi penjualan berhasil disimpan.',
@@ -375,9 +445,12 @@ class PenjualanController extends BaseController
                     'tanggal'    => $penjualan['tanggal_transaksi'],
                     'kasir'      => Auth::user()->nama,
                     'pembayaran' => $penjualan['pembayaran'],
+                    'discount'   => $penjualan['discount'],
                     'items'      => $details,
-                    'grandTotal' => collect($details)->sum('subtotal'),
+                    'jasa'       => $daftarJasa,
+                    'grandTotal' => $grandTotal,   // <── SUDAH BENAR
                     'totalItem'  => collect($details)->sum('qty'),
+                    'customer'   => $costumer,
                 ]
             ]);
         } catch (\Exception $e) {
@@ -473,6 +546,55 @@ class PenjualanController extends BaseController
             }
         }
 
+        $costumer = Costumer::where('uuid_penjualan', $penjualan['uuid'])->first();
+
+        $daftarJasa = [];
+
+        if (!empty($penjualan->uuid_jasa)) {
+
+            // Decode JSON → dapat array UUID
+            $jasaUUIDs = is_array($penjualan->uuid_jasa)
+                ? $penjualan->uuid_jasa
+                : json_decode($penjualan->uuid_jasa, true);
+
+            // Normalisasi
+            $jasaUUIDs = array_map(function ($item) {
+                return is_array($item) ? ($item['uuid'] ?? null) : $item;
+            }, $jasaUUIDs);
+
+            $jasaUUIDs = array_filter($jasaUUIDs);
+
+            // Hitung qty setiap UUID
+            $counts = array_count_values($jasaUUIDs);
+
+            // Ambil data jasa unik
+            $dataJasa = Jasa::whereIn('uuid', array_keys($counts))
+                ->select('uuid', 'nama', 'harga')
+                ->get();
+
+            // Gabungkan harga + qty + subtotal
+            $daftarJasa = $dataJasa->map(function ($j) use ($counts) {
+                return [
+                    'uuid'     => $j->uuid,
+                    'nama'     => $j->nama,
+                    'harga'    => $j->harga,
+                    'qty'      => $counts[$j->uuid],               // qty berdasarkan duplikasi
+                    'subtotal' => $j->harga * $counts[$j->uuid],   // subtotal × qty
+                ];
+            });
+        }
+
+        // dd($daftarJasa);
+
+        // ===============================
+        // HITUNG TOTAL PRODUK & TOTAL JASA
+        // ===============================
+        $totalProduk = collect($allDetails)->sum('subtotal');
+        $totalJasa   = collect($daftarJasa)->sum('harga');
+
+        // Grand total = produk + jasa
+        $grandTotal = $totalProduk + $jasa;
+
         return response()->json([
             'status' => 'success',
             'data'   => [
@@ -480,10 +602,13 @@ class PenjualanController extends BaseController
                 'tanggal'    => $penjualan->tanggal_transaksi,
                 'kasir'      => Auth::user()->nama,
                 'pembayaran' => $penjualan->pembayaran,
+                'discount'   => $penjualan->discount,
                 'items'      => $allDetails,
-                'grandTotal' => $grandTotal + ($jasa ? $jasa : 0),
+                'jasa'       => $daftarJasa,
+                'grandTotal' => $grandTotal,
                 'totalItem'  => $totalItem,
                 'totalJasa'  => $jasa ? $jasa : 0,
+                'customer'   => $costumer,
             ]
         ]);
     }
@@ -600,98 +725,21 @@ class PenjualanController extends BaseController
     //     shell_exec("lp -d Codeshop -o raw " . escapeshellarg($tmpFile));
     // }
 
-    // // ===============================
-    // // Helper: Center Text
-    // // ===============================
-    function centerText($text, $width = 48)
+    public function cetakStrukText(Request $request)
     {
-        $len = strlen($text);
-        if ($len >= $width) return $text;
-        $left = floor(($width - $len) / 2);
-        $right = $width - $len - $left;
-        return str_repeat(" ", $left) . $text . str_repeat(" ", $right);
-    }
+        $json = $request->get('data');
+        $data = json_decode($json, true);
 
-    public function cetakStrukThermal(Request $request)
-    {
-        $data = $request->all();
-        $struk = $this->printStruk($data);
-
-        return response()->json([
-            'raw' => base64_encode($struk), // kirim dalam base64 biar aman di JSON
-            'status' => 'success',
-            'message' => 'Struk siap dicetak di client'
-        ]);
-    }
-
-    function printStruk($data)
-    {
-        $width = 46;
-        $ESC = "\x1B";
-        $GS  = "\x1D";
-        $struk = "";
-
-        // Reset printer
-        $struk .= $ESC . "@";
-        $struk .= $ESC . "a" . "\x01"; // Center
-        $struk .= strtoupper($data['outlet_nama']) . "\n";
-        $struk .= $data['outlet_alamat'] . "\n";
-        $struk .= "Telp: " . $data['outlet_telp'] . "\n";
-        $struk .= str_repeat("=", $width) . "\n";
-
-        // Info transaksi
-        $struk .= $ESC . "a" . "\x00";
-        $struk .= "No      : {$data['no_bukti']}\n";
-        $struk .= "Tanggal : {$data['tanggal']}\n";
-        $struk .= "Kasir   : {$data['kasir']}\n";
-        $struk .= "Bayar   : {$data['pembayaran']}\n";
-        $struk .= str_repeat("-", $width) . "\n";
-
-        // Header tabel
-        $struk .= sprintf("%-27s %5s %12s\n", "Barang", "Qty", "Harga");
-        $struk .= str_repeat("-", $width) . "\n";
-
-        // Isi barang
-        foreach ($data['items'] as $item) {
-            $nama = trim($item['nama']);
-            $qty = $item['qty'];
-            $harga = number_format($item['harga'], 0, ',', '.');
-            $subtotal = number_format($item['subtotal'], 0, ',', '.');
-
-            // Bungkus nama barang biar tidak nabrak
-            $wrapped = wordwrap($nama, 27, "\n", true);
-            $lines = explode("\n", $wrapped);
-
-            // Cetak baris pertama dengan qty dan harga
-            $struk .= sprintf("%-27s %5s %12s\n", $lines[0], $qty, $subtotal);
-
-            // Kalau nama barang lebih dari 1 baris, cetak baris lanjutannya
-            for ($i = 1; $i < count($lines); $i++) {
-                $struk .= sprintf("%-27s\n", $lines[$i]);
-            }
-        }
-
-        // Total jasa
-        if (!empty($data['totalJasa']) && $data['totalJasa'] > 0) {
-            $totalJasa = number_format($data['totalJasa'], 0, ',', '.');
-            $struk .= str_repeat("-", $width) . "\n";
-            $struk .= sprintf("%-27s %5s %12s\n", "Jasa", 1, $totalJasa);
-        }
-
-        // Total & Grand total
-        $struk .= str_repeat("-", $width) . "\n";
-        $struk .= sprintf("%-27s %5s %12s\n", "Total Item", $data['totalItem'], "");
-        $struk .= sprintf("%-27s %5s %12s\n", "Grand Total", "", number_format($data['grandTotal'], 0, ',', '.'));
-        $struk .= str_repeat("=", $width) . "\n";
-
-        // Footer
-        $struk .= $ESC . "a" . "\x01"; // Center
-        $struk .= "*** Terima Kasih ***\n";
-        $struk .= "Barang yang sudah dibeli\n";
-        $struk .= "tidak dapat ditukar/dikembalikan\n";
-        $struk .= $ESC . "d" . "\x03"; // Feed
-        $struk .= $GS . "V" . "\x42" . "\x00"; // Cut
-
-        return $struk;
+        $pdf = PDF::loadView('kasir.catakstruk.index', compact('data'))
+            ->setPaper('A4')
+            ->setOption('enable-local-file-access', true)
+            ->setOption('load-error-handling', 'ignore')
+            ->setOption('load-media-error-handling', 'ignore')
+            ->setOption('no-stop-slow-scripts', true)
+            ->setOption('margin-top', 0)
+            ->setOption('margin-bottom', 0)
+            ->setOption('margin-left', 0)
+            ->setOption('margin-right', 0);
+        return $pdf->inline($data['no_bukti'] . '-struk.pdf'); // tampil di tab baru / browser
     }
 }

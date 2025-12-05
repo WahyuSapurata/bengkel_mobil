@@ -1,0 +1,13 @@
+2025/12/03-00:17:53.486 c5ac Reusing MANIFEST /media/wahyu/New Volume/project_developer/bengkel_mobil/whatsapp-bot/.wwebjs_auth/session-MotoCore-bot/Default/IndexedDB/https_web.whatsapp.com_0.indexeddb.leveldb/MANIFEST-000001
+2025/12/03-00:17:53.502 c5ac Recovering log #67
+2025/12/03-00:17:53.744 c5ac Reusing old log /media/wahyu/New Volume/project_developer/bengkel_mobil/whatsapp-bot/.wwebjs_auth/session-MotoCore-bot/Default/IndexedDB/https_web.whatsapp.com_0.indexeddb.leveldb/000067.log 
+2025/12/03-00:17:57.150 c5ae Level-0 table #72: started
+2025/12/03-00:17:57.805 c5ae Level-0 table #72: 649185 bytes OK
+2025/12/03-00:17:57.898 c5ae Delete type=0 #67
+2025/12/03-00:17:57.899 c5b3 Manual compaction at level-0 from '\x00'\x00\x00\x00' @ 72057594037927935 : 1 .. '\x00(\x00\x00\x00' @ 0 : 0; will stop at (end)
+2025/12/03-00:18:02.343 c5b0 Compacting 1@1 + 1@2 files
+2025/12/03-00:18:03.384 c5b0 Generated table #73@1: 24731 keys, 1024376 bytes
+2025/12/03-00:18:03.384 c5b0 Compacted 1@1 + 1@2 files => 1024376 bytes
+2025/12/03-00:18:03.401 c5b0 compacted to: files[ 0 0 1 0 0 0 0 ]
+2025/12/03-00:18:03.405 c5b0 Delete type=2 #69
+2025/12/03-00:18:03.405 c5b0 Delete type=2 #72

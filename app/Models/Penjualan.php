@@ -19,6 +19,7 @@ class Penjualan extends Model
         'no_bukti',
         'tanggal_transaksi',
         'pembayaran',
+        'discount',
     ];
 
     protected $casts = [

@@ -305,7 +305,7 @@
     <script src="{{ asset('assets/vendors/js/bootstrap.min.js') }}"></script>
     {{-- <script src="https://cdn.jsdelivr.net/npm/qz-tray@2.2.5/qz-tray.js"></script> --}}
     {{-- <script src="http://localhost:8182/qz-tray.js"></script> --}}
-    <script src="{{ asset('qz-tray.js') }}"></script>
+    {{-- <script src="{{ asset('qz-tray.js') }}"></script> --}}
     <script src="{{ asset('assets/sweet-alert/sweetalert2.min.js') }}"></script>
     {{-- <script src="https://cdn.jsdelivr.net/npm/qz-tray@2.2.5/qz-tray.js"></script> --}}
     <script>
@@ -409,9 +409,10 @@
 
             let selectedJasa = []; // array untuk menyimpan jasa yang dipilih
             let totalJasa = 0;
+            let totalJasaFinal = 0;
+            let jasaDiscount = "0"; // menyimpan text discount (misal "10%" atau "5000")
 
             let form = document.getElementById("form-kasir");
-
             let formDataCancel = new FormData(form);
 
             // ----------------
@@ -642,6 +643,7 @@
                     listJasa.classList.add("d-none");
                     listJasa.innerHTML = "";
                     selectedJasa = [];
+                    jasaDiscount = "0";
                     updateTotal();
                 }
             });
@@ -729,12 +731,20 @@
             function updateTotal() {
                 const total = selectedJasa.reduce((sum, j) => sum + j.harga, 0);
                 totalJasa = total;
-                hitungTotal();
 
-                // hapus semua input hidden lama
+                // jika ada discount sebelumnya → hitung ulang
+                if (jasaDiscount !== "0") {
+                    totalJasaFinal = hitungPotongan(totalJasa, jasaDiscount);
+                } else {
+                    totalJasaFinal = totalJasa;
+                }
+
+                hitungTotal(); // ini pakai totalJasaFinal
+
+                // hapus hidden input lama
                 document.querySelectorAll("input[name='uuid_jasa[]']").forEach(el => el.remove());
 
-                // buat ulang hidden input sesuai isi selectedJasa
+                // buat hidden input baru
                 const form = document.querySelector("form");
                 selectedJasa.forEach(j => {
                     let input = document.createElement("input");
@@ -842,19 +852,55 @@
 
                 if (e.key === "F7") {
                     e.preventDefault();
-                    if (!selectedRow) {
+                    if (!totalJasa || totalJasa <= 0) {
                         Swal.fire({
                             title: "Warning!",
-                            text: "⚠️ Pilih dulu produk di tabel yang ingin di discount!",
+                            text: "⚠️ Belum ada jasa yang ingin didiscount!",
                             icon: "warning",
                             showConfirmButton: false,
-                            timer: 1000
+                            timer: 1200
                         });
                         return;
                     }
-                    editDiscount(selectedRow);
+
+                    editDiscountOnTotal();
                 }
             });
+
+            function hitungPotongan(total, discount) {
+                let potongan = 0;
+
+                if (discount.includes("%")) {
+                    let persen = parseFloat(discount.replace("%", "")) || 0;
+                    potongan = total * (persen / 100);
+                } else {
+                    potongan = parseFloat(discount.replace(/\D/g, "")) || 0;
+                }
+
+                if (potongan > total) potongan = total;
+
+                return Math.round(total - potongan);
+            }
+
+            function editDiscountOnTotal() {
+                Swal.fire({
+                    title: "Tambah Discount",
+                    input: "text",
+                    inputValue: jasaDiscount,
+                    inputLabel: "Isi nominal (5000) atau persen (10%)",
+                    showCancelButton: true,
+                    confirmButtonText: "Simpan",
+                    cancelButtonText: "Batal",
+                    preConfirm: (v) => v.trim() || "0"
+                }).then(r => {
+                    if (!r.isConfirmed) return;
+
+                    jasaDiscount = r.value;
+                    totalJasaFinal = hitungPotongan(totalJasa, jasaDiscount);
+
+                    hitungTotal(); // refresh tampilan total final
+                });
+            }
 
             // === EDIT QTY (F4) ===
             // Hitung dan simpan qty + harga tier
@@ -903,7 +949,6 @@
                 if (match) {
                     jumlah = match.harga_jual;
                 }
-
 
                 // simpan ke DOM
                 qtyCell.innerText = newQty;
@@ -1031,7 +1076,6 @@
                             }
                         }
 
-
                         hitungTotal();
                     })
                     .catch(err => {
@@ -1046,9 +1090,7 @@
 
             // === EDIT DISCOUNT (F7) ===
             function editDiscount(row) {
-                const currentDiscount = row.dataset.discount || "0"; // bisa "5000" atau "10%"
-                const hargaDefault = Number(row.dataset.hargaDefault) || 0;
-                const qty = parseInt(row.querySelector(".qty")?.innerText, 10) || 1;
+                const currentDiscount = "0"; // bisa "5000" atau "10%"
 
                 Swal.fire({
                     title: "Tambah Discount",
@@ -1066,10 +1108,7 @@
                     if (!r.isConfirmed) return;
 
                     let discount = r.value;
-                    row.dataset.discount = discount;
 
-                    // hitung subtotal baru
-                    let harga = hargaDefault * qty;
                     let potongan = 0;
 
                     if (discount.includes("%")) {
@@ -1129,26 +1168,32 @@
 
                     if (!qtyCell || !jumlahCell) {
                         console.warn("⚠️ Row tidak lengkap, dilewati:", row);
-                        return; // skip row yang rusak
+                        return;
                     }
 
                     let qty = parseInt(qtyCell.innerText) || 0;
-                    let jumlahText = jumlahCell.innerText.replace(/[^\d]/g, ""); // buang Rp, koma, titik
+                    let jumlahText = jumlahCell.innerText.replace(/[^\d]/g, "");
                     let jumlah = parseInt(jumlahText) || 0;
 
                     grandTotal += jumlah;
                     item += qty;
                 });
 
-                // ✅ tambahkan jasa
-                if (totalJasa) {
+                // ==============================
+                // 🔥 tambahkan total jasa SETELAH DISKON
+                // ==============================
+                if (typeof totalJasaFinal !== "undefined" && totalJasaFinal > 0) {
+                    grandTotal += totalJasaFinal;
+                } else if (totalJasa) {
+                    // jika belum ada diskon
                     grandTotal += totalJasa;
                 }
+                // ==============================
 
                 // tampilkan total
                 let totalCell = document.querySelector("#grandTotal");
                 if (totalCell) {
-                    totalCell.innerText = "Rp " + grandTotal.toLocaleString();
+                    totalCell.innerText = "Rp " + grandTotal.toLocaleString("id-ID");
                     itemTotalEl.innerText = item + " item";
                 }
             }
@@ -1241,6 +1286,8 @@
                             formDataCancel.append("total_harga[]", jumlah);
                         });
 
+                        formData.append("discount", jasaDiscount);
+
                         // tambahkan info pembayaran
                         formData.append("uang_customer", uangCustomer);
                         formData.append("kembalian", kembalian);
@@ -1285,43 +1332,83 @@
                                             reverseButtons: true
                                         }).then(result => {
                                             if (result.isConfirmed) {
-                                                const strukData = {
+                                                strukData = {
                                                     outlet_nama: "BENGKEL MOBIL MMM",
                                                     outlet_alamat: "Jl. Tun Abdul Razak",
                                                     outlet_telp: "082194581659 / 082190461884",
-                                                    no_bukti: res.data
-                                                        .no_bukti,
-                                                    tanggal: res.data
-                                                        .tanggal,
-                                                    kasir: res.data.kasir,
-                                                    pembayaran: res.data
-                                                        .pembayaran,
-                                                    items: res.data.items
-                                                        .map(i => ({
-                                                            nama: i
-                                                                .nama,
-                                                            qty: Number(
-                                                                i
-                                                                .qty
-                                                            ),
-                                                            harga: Number(
-                                                                i
-                                                                .harga
-                                                            ),
-                                                            subtotal: Number(
-                                                                i
-                                                                .subtotal
-                                                            )
-                                                        })),
-                                                    totalJasa: Number(
-                                                        totalJasa),
-                                                    totalItem: Number(res
+                                                    no_bukti: res
                                                         .data
-                                                        .totalItem),
-                                                    grandTotal: Number(res
-                                                            .data
-                                                            .grandTotal) +
+                                                        .no_bukti,
+                                                    tanggal: res
+                                                        .data
+                                                        .tanggal,
+                                                    kasir: res
+                                                        .data
+                                                        .kasir,
+                                                    pembayaran: res
+                                                        .data
+                                                        .pembayaran,
+                                                    discount: res
+                                                        .data
+                                                        .discount,
+                                                    items: res
+                                                        .data
+                                                        .items
+                                                        .map(
+                                                            i =>
+                                                            ({
+                                                                nama: i
+                                                                    .nama,
+                                                                qty: Number(
+                                                                    i
+                                                                    .qty
+                                                                ),
+                                                                harga: Number(
+                                                                    i
+                                                                    .harga
+                                                                ),
+                                                                subtotal: Number(
+                                                                    i
+                                                                    .subtotal
+                                                                )
+                                                            })
+                                                        ),
+                                                    jasa: res
+                                                        .data
+                                                        .jasa
+                                                        .map(
+                                                            i =>
+                                                            ({
+                                                                nama: i
+                                                                    .nama,
+                                                                qty: i
+                                                                    .qty,
+                                                                subtotal: Number(
+                                                                    i
+                                                                    .subtotal
+                                                                ),
+                                                                harga: Number(
+                                                                    i
+                                                                    .harga
+                                                                ),
+                                                            })
+                                                        ),
+                                                    totalJasa: Number(
                                                         totalJasa
+                                                    ),
+                                                    totalItem: Number(
+                                                        res
+                                                        .data
+                                                        .totalItem
+                                                    ),
+                                                    grandTotal: Number(
+                                                        res
+                                                        .data
+                                                        .grandTotal
+                                                    ),
+                                                    customer: res
+                                                        .data
+                                                        .customer,
                                                 };
                                                 cetakStruk(strukData);
                                             }
@@ -1593,6 +1680,9 @@
                                                                                 pembayaran: res
                                                                                     .data
                                                                                     .pembayaran,
+                                                                                discount: res
+                                                                                    .data
+                                                                                    .discount,
                                                                                 items: res
                                                                                     .data
                                                                                     .items
@@ -1615,6 +1705,26 @@
                                                                                             )
                                                                                         })
                                                                                     ),
+                                                                                jasa: res
+                                                                                    .data
+                                                                                    .jasa
+                                                                                    .map(
+                                                                                        i =>
+                                                                                        ({
+                                                                                            nama: i
+                                                                                                .nama,
+                                                                                            qty: i
+                                                                                                .qty,
+                                                                                            subtotal: Number(
+                                                                                                i
+                                                                                                .subtotal
+                                                                                            ),
+                                                                                            harga: Number(
+                                                                                                i
+                                                                                                .harga
+                                                                                            ),
+                                                                                        })
+                                                                                    ),
                                                                                 totalJasa: Number(
                                                                                     totalJasa
                                                                                 ),
@@ -1627,7 +1737,10 @@
                                                                                     res
                                                                                     .data
                                                                                     .grandTotal
-                                                                                )
+                                                                                ),
+                                                                                customer: res
+                                                                                    .data
+                                                                                    .customer,
                                                                             };
                                                                         cetakStruk
                                                                             (
@@ -1708,63 +1821,9 @@
                 }
             });
 
-            async function cetakStruk(data) {
-                try {
-                    // 1️⃣ Kirim data ke server untuk mendapatkan raw struk
-                    const res = await fetch("/kasir/print-struk", {
-                        method: "POST",
-                        headers: {
-                            "Content-Type": "application/json",
-                            "X-CSRF-TOKEN": document
-                                .querySelector('meta[name="csrf-token"]')
-                                .getAttribute("content"),
-                        },
-                        body: JSON.stringify(data),
-                    });
-
-                    const result = await res.json();
-
-                    if (!result.raw) {
-                        throw new Error("Server tidak mengembalikan data struk (result.raw kosong)");
-                    }
-
-                    const rawBase64 = result.raw.trim();
-                    const rawDecoded = atob(rawBase64);
-
-                    const printer = "POS-80-2"; // ubah sesuai nama printer kamu
-                    const config = qz.configs.create(printer);
-
-                    // 🔌 Pastikan koneksi QZ Tray terbuka
-                    if (!qz.websocket.isActive()) {
-                        await qz.websocket.connect();
-                    }
-
-                    // ✅ Pecah data panjang menjadi beberapa potongan (max 900 byte)
-                    const chunkSize = 900;
-                    const chunks = [];
-                    for (let i = 0; i < rawDecoded.length; i += chunkSize) {
-                        chunks.push(rawDecoded.substring(i, i + chunkSize));
-                    }
-
-                    // Cetak semua chunk satu per satu
-                    for (const [i, chunk] of chunks.entries()) {
-                        await qz.print(config, [{
-                            type: "raw",
-                            format: "plain",
-                            data: chunk,
-                        }]);
-                    }
-
-                } catch (err) {
-                    alert("Terjadi kesalahan saat mencetak: " + err.message);
-                } finally {
-                    // Jangan langsung disconnect biar print buffer selesai dulu
-                    setTimeout(() => {
-                        if (qz.websocket.isActive()) {
-                            qz.websocket.disconnect();
-                        }
-                    }, 1500);
-                }
+            function cetakStruk(data) {
+                let jsonString = encodeURIComponent(JSON.stringify(data));
+                window.open(`/kasir/print-struk?data=${jsonString}`, "_blank");
             }
 
             // ------------------
@@ -1796,6 +1855,8 @@
                 // ✅ reset jasa
                 selectedJasa = []; // kosongkan array jasa
                 totalJasa = 0; // reset total jasa
+                jasaDiscount = "0";
+                totalJasaFinal = 0;
                 const listJasa = document.getElementById("list-jasa");
                 if (listJasa) {
                     listJasa.innerHTML = ""; // kosongkan tampilan jasa
@@ -1949,40 +2010,99 @@
                                     const res = await detailRes.json();
 
                                     if (res.status === "success") {
-                                        const itemsHtml = res.data.items.map(i => `
-                                <tr>
-                                    <td>${i.nama}</td>
-                                    <td>${i.qty}</td>
-                                    <td>${Number(i.harga).toLocaleString()}</td>
-                                    <td>${Number(i.subtotal).toLocaleString()}</td>
-                                </tr>
-                            `).join("");
 
+                                        // =============================
+                                        // HITUNG TOTAL PRODUK, JASA, DISKON
+                                        // =============================
+                                        const items = res.data.items ?? [];
+                                        const totalProduk = items.reduce((sum, i) => sum +
+                                            Number(i.subtotal), 0);
+
+                                        let totalJasa = Number(res.data.totalJasa ?? 0);
+                                        let discount = res.data.discount;
+
+                                        let totalJasaAfterDiscount = totalJasa;
+
+                                        if (discount) {
+                                            if (String(discount).includes("%")) {
+                                                // Diskon persen
+                                                let angka = parseFloat(discount.replace("%",
+                                                    ""));
+                                                let potongan = (totalJasa * angka) / 100;
+                                                totalJasaAfterDiscount = totalJasa -
+                                                    potongan;
+                                            } else if (!isNaN(discount)) {
+                                                // Diskon nominal
+                                                totalJasaAfterDiscount = Math.max(0,
+                                                    totalJasa - Number(discount));
+                                            }
+                                        }
+
+                                        const finalGrandTotal = totalProduk +
+                                            totalJasaAfterDiscount;
+
+                                        // =============================
+                                        // TAMPILKAN TABEL ITEMS
+                                        // =============================
+                                        const itemsHtml = items.map(i => `
+                <tr>
+                    <td>${i.nama}</td>
+                    <td>${i.qty}</td>
+                    <td>${Number(i.harga).toLocaleString()}</td>
+                    <td>${Number(i.subtotal).toLocaleString()}</td>
+                </tr>
+            `).join("");
+
+                                        // =============================
+                                        // APA YANG DITAMPILKAN DI DISCOUNT
+                                        // =============================
+                                        let discountDisplay = "-";
+                                        if (discount) {
+                                            if (String(discount).includes("%")) {
+                                                discountDisplay = discount;
+                                            } else if (!isNaN(discount)) {
+                                                discountDisplay = "Rp " + Number(discount)
+                                                    .toLocaleString();
+                                            } else {
+                                                discountDisplay = discount;
+                                            }
+                                        }
+
+                                        // =============================
+                                        // HTML FINAL
+                                        // =============================
                                         const detailHtml = `
-                                <div class="table-responsive">
-                                    <table class="table table-bordered">
-                                        <thead>
-                                            <tr>
-                                                <th>Nama</th>
-                                                <th>Qty</th>
-                                                <th>Harga</th>
-                                                <th>Subtotal</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            ${itemsHtml}
-                                            <tr>
-                                                <td colspan="3" class="text-end fw-bold">Jasa</td>
-                                                <td>${Number(res.data.totalJasa).toLocaleString()}</td>
-                                            </tr>
-                                            <tr>
-                                                <td colspan="3" class="text-end fw-bold">Grand Total</td>
-                                                <td>${Number(res.data.grandTotal).toLocaleString()}</td>
-                                            </tr>
-                                        </tbody>
-                                    </table>
-                                </div>
-                            `;
+                <div class="table-responsive">
+                    <table class="table table-bordered">
+                        <thead>
+                            <tr>
+                                <th>Nama</th>
+                                <th>Qty</th>
+                                <th>Harga</th>
+                                <th>Subtotal</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${itemsHtml}
+
+                            <tr>
+                                <td colspan="3" class="text-end fw-bold">Total Jasa</td>
+                                <td>${totalJasa.toLocaleString()}</td>
+                            </tr>
+
+                            <tr>
+                                <td colspan="3" class="text-end fw-bold">Discount (Jasa)</td>
+                                <td>${discountDisplay}</td>
+                            </tr>
+
+                            <tr>
+                                <td colspan="3" class="text-end fw-bold">Grand Total</td>
+                                <td>${finalGrandTotal.toLocaleString()}</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            `;
 
                                         Swal.fire({
                                             title: `Detail Struk - ${res.data.no_bukti}`,
@@ -1995,38 +2115,83 @@
                                             if (result.isConfirmed) {
                                                 const totalJasa = res.data
                                                     .totalJasa ?? 0;
-                                                const strukData = {
+                                                strukData = {
                                                     outlet_nama: "BENGKEL MOBIL MMM",
                                                     outlet_alamat: "Jl. Tun Abdul Razak",
                                                     outlet_telp: "082194581659 / 082190461884",
-                                                    no_bukti: res.data.no_bukti,
-                                                    tanggal: res.data.tanggal,
-                                                    kasir: res.data.kasir,
-                                                    pembayaran: res.data
+                                                    no_bukti: res
+                                                        .data
+                                                        .no_bukti,
+                                                    tanggal: res
+                                                        .data
+                                                        .tanggal,
+                                                    kasir: res
+                                                        .data
+                                                        .kasir,
+                                                    pembayaran: res
+                                                        .data
                                                         .pembayaran,
-                                                    items: res.data.items.map(
-                                                        i => ({
-                                                            nama: i
-                                                                .nama,
-                                                            qty: Number(
-                                                                i
-                                                                .qty
-                                                            ),
-                                                            harga: Number(
-                                                                i
-                                                                .harga
-                                                            ),
-                                                            subtotal: Number(
-                                                                i
-                                                                .subtotal
-                                                            )
-                                                        })),
+                                                    discount: res
+                                                        .data
+                                                        .discount,
+                                                    items: res
+                                                        .data
+                                                        .items
+                                                        .map(
+                                                            i =>
+                                                            ({
+                                                                nama: i
+                                                                    .nama,
+                                                                qty: Number(
+                                                                    i
+                                                                    .qty
+                                                                ),
+                                                                harga: Number(
+                                                                    i
+                                                                    .harga
+                                                                ),
+                                                                subtotal: Number(
+                                                                    i
+                                                                    .subtotal
+                                                                )
+                                                            })
+                                                        ),
+                                                    jasa: res
+                                                        .data
+                                                        .jasa
+                                                        .map(
+                                                            i =>
+                                                            ({
+                                                                nama: i
+                                                                    .nama,
+                                                                qty: i
+                                                                    .qty,
+                                                                subtotal: Number(
+                                                                    i
+                                                                    .subtotal
+                                                                ),
+                                                                harga: Number(
+                                                                    i
+                                                                    .harga
+                                                                ),
+                                                            })
+                                                        ),
                                                     totalJasa: Number(
-                                                        totalJasa),
-                                                    totalItem: Number(res.data
-                                                        .totalItem),
-                                                    grandTotal: Number(res.data
-                                                        .grandTotal)
+                                                        totalJasa
+                                                    ),
+                                                    totalItem: Number(
+                                                        res
+                                                        .data
+                                                        .totalItem
+                                                    ),
+                                                    grandTotal: Number(
+                                                        res
+                                                        .data
+                                                        .grandTotal
+                                                    ),
+                                                    customer: res
+                                                        .data
+                                                        .customer,
                                                 };
 
                                                 cetakStruk(strukData);

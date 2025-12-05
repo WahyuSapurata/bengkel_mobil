@@ -180,7 +180,8 @@ Route::group([
     Route::get('/produk-get', [App\Http\Controllers\PenjualanController::class, 'get_produk'])->name('produk-get');
     Route::post('/penjualan-store', [App\Http\Controllers\PenjualanController::class, 'store'])->name('penjualan-store');
 
-    Route::post('/print-struk', [App\Http\Controllers\PenjualanController::class, 'cetakStrukThermal'])->name('print-struk');
+    Route::get('/print-struk', [App\Http\Controllers\PenjualanController::class, 'cetakStrukText'])->name('print-struk');
+    // Route::get('/print-struk', [App\Http\Controllers\PenjualanController::class, 'cetakStrukText'])->name('print-struk');
 
     Route::get('/get-jasa', [App\Http\Controllers\PenjualanController::class, 'get_jasa'])->name('get-jasa');
     Route::get('/get-stock', [App\Http\Controllers\PenjualanController::class, 'get_stock'])->name('get-stock');

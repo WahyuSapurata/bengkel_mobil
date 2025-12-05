@@ -109,6 +109,7 @@ class Dashboard extends BaseController
                 DB::raw('penjualans.tanggal_transaksi as tanggal'),
                 'users.nama as kasir',
                 'penjualans.pembayaran',
+                'penjualans.discount',
                 'penjualans.uuid_jasa'
             )
             ->orderBy('penjualans.tanggal_transaksi', 'desc');
@@ -157,50 +158,32 @@ class Dashboard extends BaseController
                 ->first();
 
             // === Jasa (perbaikan: normalisasi sebelum array_count_values) ===
+            // === Jasa + Discount Jasa ===
             $totalJasa = 0;
+            $discountJasa = 0;
 
             if (!empty($trx->uuid_jasa)) {
-                $uuidJasa = $trx->uuid_jasa;
+                $uuidJasa = is_string($trx->uuid_jasa)
+                    ? json_decode($trx->uuid_jasa, true)
+                    : $trx->uuid_jasa;
 
-                // Jika tersimpan sebagai JSON string → decode
-                if (is_string($uuidJasa)) {
-                    $decoded = json_decode($uuidJasa, true);
-                    // jika json_decode gagal, tetap biarkan sebagai string
-                    $uuidJasa = $decoded === null ? [$uuidJasa] : $decoded;
-                }
-
-                // Pastikan array
                 if (!is_array($uuidJasa)) {
                     $uuidJasa = [$uuidJasa];
                 }
 
-                // Normalisasi elemen:
-                // - jika elemen adalah array dan ada key 'uuid', ambil itu
-                // - jika elemen adalah object (stdClass), ambil ->uuid
-                // - jika elemen adalah string/number, pakai langsung
+                // Normalisasi
                 $uuidJasa = array_map(function ($item) {
-                    if (is_array($item) && isset($item['uuid'])) {
-                        return (string) $item['uuid'];
-                    }
-                    if (is_object($item) && isset($item->uuid)) {
-                        return (string) $item->uuid;
-                    }
-                    if (is_string($item) || is_int($item)) {
-                        return (string) $item;
-                    }
-                    return null; // elemen aneh akan disaring
+                    if (is_array($item) && isset($item['uuid'])) return (string) $item['uuid'];
+                    if (is_object($item) && isset($item->uuid)) return (string) $item->uuid;
+                    if (is_string($item) || is_int($item)) return (string) $item;
+                    return null;
                 }, $uuidJasa);
 
-                // Filter semua null / kosong
-                $uuidJasa = array_values(array_filter($uuidJasa, function ($v) {
-                    return $v !== null && $v !== '';
-                }));
+                $uuidJasa = array_filter($uuidJasa);
 
                 if (!empty($uuidJasa)) {
-                    // Sekarang aman untuk dipakai array_count_values
                     $counts = array_count_values($uuidJasa);
 
-                    // Ambil harga jasa (pluck menghasilkan Collection / array)
                     $hargaJasa = DB::table('jasas')
                         ->whereIn('uuid', array_keys($counts))
                         ->pluck('harga', 'uuid');
@@ -212,16 +195,30 @@ class Dashboard extends BaseController
                 }
             }
 
+            // === Discount Jasa ===
+            if (!empty($trx->discount)) {
+                $disc = $trx->discount;
+
+                if (str_contains($disc, '%')) {
+                    $persen = floatval(str_replace('%', '', $disc));
+                    $discountJasa = ($totalJasa * $persen) / 100;
+                } else {
+                    $discountJasa = floatval($disc);
+                }
+            }
+
+            $totalJasaSetelahDisc = max(0, $totalJasa - $discountJasa);
+
             $modal      = $produkTotals->total_modal ?? 0;
             $penjualan  = $produkTotals->total_penjualan ?? 0;
             $profit     = $produkTotals->total_profit ?? 0;
-            $sub_total      = $penjualan + $totalJasa;
+            $sub_total = $penjualan + $totalJasaSetelahDisc;
 
             // === Update nilai kasir ===
             $rekapTanggal[$tanggalFormatted]['kasir'][$keyKasir]['modal']     += $modal;
             $rekapTanggal[$tanggalFormatted]['kasir'][$keyKasir]['penjualan'] += $penjualan;
-            $rekapTanggal[$tanggalFormatted]['kasir'][$keyKasir]['jasa']      += $totalJasa;
-            $rekapTanggal[$tanggalFormatted]['kasir'][$keyKasir]['profit']    += $profit + $totalJasa;
+            $rekapTanggal[$tanggalFormatted]['kasir'][$keyKasir]['jasa']      += $totalJasaSetelahDisc;
+            $rekapTanggal[$tanggalFormatted]['kasir'][$keyKasir]['profit']    += $profit + $totalJasaSetelahDisc;
             $rekapTanggal[$tanggalFormatted]['kasir'][$keyKasir]['sub_total']     += $sub_total;
 
             if ($trx->pembayaran === 'Tunai') {
@@ -277,6 +274,7 @@ class Dashboard extends BaseController
                 'penjualans.tanggal_transaksi as tanggal',
                 'users.nama as kasir',
                 'penjualans.pembayaran',
+                'penjualans.discount',
                 'penjualans.uuid_jasa'
             )
             ->orderBy('tanggal', 'asc');
@@ -333,49 +331,30 @@ class Dashboard extends BaseController
 
             // === Jasa (perbaikan: normalisasi sebelum array_count_values) ===
             $totalJasa = 0;
+            $discountJasa = 0;
 
             if (!empty($trx->uuid_jasa)) {
-                $uuidJasa = $trx->uuid_jasa;
+                $uuidJasa = is_string($trx->uuid_jasa)
+                    ? json_decode($trx->uuid_jasa, true)
+                    : $trx->uuid_jasa;
 
-                // Jika tersimpan sebagai JSON string → decode
-                if (is_string($uuidJasa)) {
-                    $decoded = json_decode($uuidJasa, true);
-                    // jika json_decode gagal, tetap biarkan sebagai string
-                    $uuidJasa = $decoded === null ? [$uuidJasa] : $decoded;
-                }
-
-                // Pastikan array
                 if (!is_array($uuidJasa)) {
                     $uuidJasa = [$uuidJasa];
                 }
 
-                // Normalisasi elemen:
-                // - jika elemen adalah array dan ada key 'uuid', ambil itu
-                // - jika elemen adalah object (stdClass), ambil ->uuid
-                // - jika elemen adalah string/number, pakai langsung
+                // Normalisasi
                 $uuidJasa = array_map(function ($item) {
-                    if (is_array($item) && isset($item['uuid'])) {
-                        return (string) $item['uuid'];
-                    }
-                    if (is_object($item) && isset($item->uuid)) {
-                        return (string) $item->uuid;
-                    }
-                    if (is_string($item) || is_int($item)) {
-                        return (string) $item;
-                    }
-                    return null; // elemen aneh akan disaring
+                    if (is_array($item) && isset($item['uuid'])) return (string) $item['uuid'];
+                    if (is_object($item) && isset($item->uuid)) return (string) $item->uuid;
+                    if (is_string($item) || is_int($item)) return (string) $item;
+                    return null;
                 }, $uuidJasa);
 
-                // Filter semua null / kosong
-                $uuidJasa = array_values(array_filter($uuidJasa, function ($v) {
-                    return $v !== null && $v !== '';
-                }));
+                $uuidJasa = array_filter($uuidJasa);
 
                 if (!empty($uuidJasa)) {
-                    // Sekarang aman untuk dipakai array_count_values
                     $counts = array_count_values($uuidJasa);
 
-                    // Ambil harga jasa (pluck menghasilkan Collection / array)
                     $hargaJasa = DB::table('jasas')
                         ->whereIn('uuid', array_keys($counts))
                         ->pluck('harga', 'uuid');
@@ -387,16 +366,30 @@ class Dashboard extends BaseController
                 }
             }
 
+            // === Discount Jasa ===
+            if (!empty($trx->discount)) {
+                $disc = $trx->discount;
+
+                if (str_contains($disc, '%')) {
+                    $persen = floatval(str_replace('%', '', $disc));
+                    $discountJasa = ($totalJasa * $persen) / 100;
+                } else {
+                    $discountJasa = floatval($disc);
+                }
+            }
+
+            $totalJasaSetelahDisc = max(0, $totalJasa - $discountJasa);
+
             $modal      = $produkTotals->total_modal ?? 0;
             $penjualan  = $produkTotals->total_penjualan ?? 0;
             $profit     = $produkTotals->total_profit ?? 0;
-            $sub_total      = $penjualan + $totalJasa;
+            $sub_total      = $penjualan + $totalJasaSetelahDisc;
 
             // Update nilai kasir
             $rekapBulan[$bulanKey]['kasir'][$keyKasir]['modal']     += $modal;
             $rekapBulan[$bulanKey]['kasir'][$keyKasir]['penjualan'] += $penjualan;
-            $rekapBulan[$bulanKey]['kasir'][$keyKasir]['jasa']      += $totalJasa;
-            $rekapBulan[$bulanKey]['kasir'][$keyKasir]['profit']    += $profit + $totalJasa;
+            $rekapBulan[$bulanKey]['kasir'][$keyKasir]['jasa']      += $totalJasaSetelahDisc;
+            $rekapBulan[$bulanKey]['kasir'][$keyKasir]['profit']    += $profit + $totalJasaSetelahDisc;
             $rekapBulan[$bulanKey]['kasir'][$keyKasir]['sub_total']     += $sub_total;
 
             if ($trx->pembayaran === 'Tunai') {

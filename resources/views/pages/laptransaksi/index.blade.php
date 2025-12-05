@@ -143,7 +143,7 @@
                         class: 'mb-kolom-tanggal text-left align-content-center'
                     },
                     {
-                        data: 'total_jasa',
+                        data: 'total_jasa_setelah_diskon',
                         class: 'mb-kolom-tanggal text-left align-content-center',
                         render: function(data, type, row, meta) {
                             return formatRupiah(data);

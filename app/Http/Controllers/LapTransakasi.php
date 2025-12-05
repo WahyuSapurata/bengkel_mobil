@@ -60,9 +60,32 @@ class LapTransakasi extends BaseController
             })
             ->select(
                 'penjualans.*',
+
+                // === TOTAL PRODUK ===
                 DB::raw('COALESCE(SUM(detail_penjualans.total_harga),0) AS total_penjualan'),
                 DB::raw('COALESCE(SUM(harga_backup_penjualans.harga_modal * detail_penjualans.qty),0) AS total_modal'),
-                DB::raw('COALESCE(jasa.total_jasa,0) AS total_jasa')
+
+                // === TOTAL JASA SEBELUM DISKON ===
+                DB::raw('COALESCE(jasa.total_jasa, 0) AS total_jasa'),
+
+                // === DISCOUNT JASA ===
+                DB::raw("
+                    CASE
+                        WHEN penjualans.discount LIKE '%\%%'
+                        THEN (COALESCE(jasa.total_jasa,0) * REPLACE(penjualans.discount, '%', '') / 100)
+                        ELSE COALESCE(penjualans.discount, 0)
+                    END AS discount_jasa
+                "),
+
+                // === TOTAL JASA SETELAH DISKON ===
+                DB::raw("
+                    COALESCE(jasa.total_jasa,0) -
+                    CASE
+                        WHEN penjualans.discount LIKE '%\%%'
+                        THEN (COALESCE(jasa.total_jasa,0) * REPLACE(penjualans.discount, '%', '') / 100)
+                        ELSE COALESCE(penjualans.discount, 0)
+                    END AS total_jasa_setelah_diskon
+                ")
             )
             ->groupBy('penjualans.id');
 
