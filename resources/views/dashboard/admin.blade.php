@@ -51,7 +51,7 @@
                     <div class="card stretch stretch-full">
                         <div class="row">
                             <div class="card-header">
-                                <h5 class="card-title">Penjualan</h5>
+                                <h5 class="card-title">Data Penjualan</h5>
                                 <div class="card-header-action">
                                     <div class="card-header-btn">
                                         <div data-bs-toggle="tooltip" title="Refresh">
