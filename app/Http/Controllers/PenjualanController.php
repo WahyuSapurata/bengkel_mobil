@@ -531,9 +531,33 @@ class PenjualanController extends BaseController
         // Ambil jasa (kalau ada)
         $jasa = 0;
         if ($penjualan->uuid_jasa) {
-            $uuidJasa = is_array($penjualan->uuid_jasa) ? $penjualan->uuid_jasa : json_decode($penjualan->uuid_jasa, true);
+            $uuidJasa = $penjualan->uuid_jasa;
 
-            // Hitung frekuensi tiap UUID
+            // Jika JSON → decode
+            if (is_string($uuidJasa)) {
+                $uuidJasa = json_decode($uuidJasa, true);
+            }
+
+            // Harus array
+            if (!is_array($uuidJasa)) {
+                $uuidJasa = [];
+            }
+
+            // Normalisasi hanya ambil string uuid
+            $uuidJasa = array_map(function ($item) {
+                if (is_array($item) && isset($item['uuid'])) {
+                    return $item['uuid'];
+                }
+                if (is_string($item)) {
+                    return $item;
+                }
+                return null;
+            }, $uuidJasa);
+
+            // Buang null
+            $uuidJasa = array_filter($uuidJasa);
+
+            // Hitung qty tiap jasa
             $counts = array_count_values($uuidJasa);
 
             // Ambil semua harga jasa
