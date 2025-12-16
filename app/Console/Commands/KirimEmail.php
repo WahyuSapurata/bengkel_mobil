@@ -32,8 +32,8 @@ class KirimEmail extends Command
         $tanggalHariIni = Carbon::now()->format('d-m-Y');
         // $tanggalHariIni = '20-11-2025';
 
-        // $emailTujuan = 'mmmaeroautomotive@gmail.com';
-        $emailTujuan = 'wm337708@gmail.com';
+        $emailTujuan = 'mmmaeroautomotive@gmail.com';
+        // $emailTujuan = 'wm337708@gmail.com';
 
         $transaksis = DB::table('penjualans')
             ->join('users', 'penjualans.uuid_user', '=', 'users.uuid')
