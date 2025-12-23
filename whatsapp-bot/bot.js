@@ -11,19 +11,12 @@ let userOutletMap = new Map();
 const client = new Client({
     authStrategy: new LocalAuth(),
     puppeteer: {
-        executablePath: '/snap/bin/chromium',
+        executablePath: '/usr/bin/chromium-browser',
         headless: true,
         args: [
             '--no-sandbox',
             '--disable-setuid-sandbox',
-            '--disable-dev-shm-usage',
-            '--disable-gpu',
-            '--disable-software-rasterizer',
-            '--disable-features=VizDisplayCompositor',
-            '--disable-site-isolation-trials',
-            '--disable-features=IsolateOrigins,site-per-process',
-            '--no-zygote',
-            '--single-process'
+            '--disable-dev-shm-usage'
         ]
     }
 });
