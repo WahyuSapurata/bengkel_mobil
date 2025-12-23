@@ -148,7 +148,7 @@ client.on('message', async msg => {
             if (text === "5") {
                 userState[user] = "ULASAN";
                 await msg.reply(
-                    `⭐ *ULASAN LAYANAN ADS MOTOR* ⭐
+                    `⭐ *ULASAN LAYANAN MMMAEROAUTOMOTIVE* ⭐
 
 Kami ingin mendengar pengalaman Anda 🙏
 Silakan pilih penilaian:
@@ -307,7 +307,7 @@ agar kami bisa menjadi lebih baik.`
 Terima kasih sudah meluangkan waktu 🙏
 Masukan Anda sangat berarti bagi kami.
 
-9️⃣ Menu Utama`
+✍️ Ketik *menu* untuk Menu Utama`
             );
             return;
         }
