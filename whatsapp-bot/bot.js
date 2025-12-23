@@ -10,26 +10,21 @@ let userOutletMap = new Map();
 
 const client = new Client({
     authStrategy: new LocalAuth({
-        clientId: "MotoCore-bot"
+        clientId: 'MotoCore-bot'
     }),
     puppeteer: {
         headless: 'new',
+        executablePath: '/usr/bin/google-chrome',
         args: [
             '--no-sandbox',
             '--disable-setuid-sandbox',
             '--disable-dev-shm-usage',
             '--disable-gpu',
             '--disable-software-rasterizer',
-        ],
+            '--no-zygote',
+            '--single-process'
+        ]
     }
-});
-
-client.on('disconnected', reason => {
-    console.log('❌ WhatsApp disconnected:', reason);
-});
-
-process.on('unhandledRejection', err => {
-    console.error('UNHANDLED:', err);
 });
 
 client.on('qr', qr => {
