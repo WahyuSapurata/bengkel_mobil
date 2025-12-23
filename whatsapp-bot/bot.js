@@ -13,8 +13,7 @@ const client = new Client({
         clientId: "MotoCore-bot"
     }),
     puppeteer: {
-        headless: "new", // WAJIB
-        executablePath: '/usr/bin/google-chrome',
+        headless: true,
         args: [
             '--no-sandbox',
             '--disable-setuid-sandbox',
