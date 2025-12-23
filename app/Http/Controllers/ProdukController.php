@@ -639,4 +639,42 @@ class ProdukController extends BaseController
             'message' => "Label produk {$produk->nama_barang} berhasil dicetak ($jumlah label)"
         ]);
     }
+
+    public function getKategori()
+    {
+        $kategori = Kategori::all();
+        return response()->json([
+            'success' => true,
+            'data' => $kategori
+        ]);
+    }
+
+    public function getProdukByKategori($uuid_kategori)
+    {
+        $produk = Produk::select(
+            'produks.nama_barang',
+            DB::raw("
+                (
+                    SELECT COALESCE(SUM(sh.stock), 0)
+                    FROM stok_histories sh
+                    WHERE sh.uuid_produk = produks.uuid
+                ) AS stok
+            "),
+            DB::raw("
+                ROUND(
+                    (
+                        CAST(produks.hrg_modal AS DECIMAL(15,2))
+                        + (CAST(produks.hrg_modal AS DECIMAL(15,2)) * CAST(produks.profit AS DECIMAL(15,2)) / 100)
+                    ) / 1000
+                ) * 1000 AS harga_jual
+            ")
+        )
+            ->where('produks.uuid_kategori', $uuid_kategori)
+            ->get();
+
+        return response()->json([
+            'success' => true,
+            'data' => $produk
+        ]);
+    }
 }

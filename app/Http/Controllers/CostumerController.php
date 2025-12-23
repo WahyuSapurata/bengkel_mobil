@@ -113,4 +113,50 @@ class CostumerController extends BaseController
             'message' => 'Costumer not found'
         ], 404);
     }
+
+    public function getCostumerByPlatBoot($params)
+    {
+        $customer = Costumer::with('penjualan')
+            ->where('plat', $params)
+            ->first();
+
+        // Jika customer tidak ditemukan
+        if (!$customer) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Customer tidak ditemukan'
+            ], 404);
+        }
+
+        $jasaList = [];
+
+        if (
+            $customer->penjualan &&
+            !empty($customer->penjualan->uuid_jasa)
+        ) {
+            // Pastikan uuid_jasa berupa array
+            $uuidJasa = is_array($customer->penjualan->uuid_jasa)
+                ? $customer->penjualan->uuid_jasa
+                : json_decode($customer->penjualan->uuid_jasa, true);
+
+            if (is_array($uuidJasa) && count($uuidJasa) > 0) {
+                $jasaList = Jasa::whereIn('uuid', $uuidJasa)
+                    ->pluck('nama')
+                    ->toArray();
+            }
+        }
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'uuid'   => $customer->uuid,
+                'nama'   => $customer->nama,
+                'alamat' => $customer->alamat,
+                'nomor'  => $customer->nomor,
+                'plat'   => $customer->plat,
+                'bukti'  => $customer->penjualan->no_bukti ?? '-',
+                'jasa'   => $jasaList,
+            ]
+        ]);
+    }
 }

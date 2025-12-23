@@ -123,4 +123,9 @@ class JasaController extends BaseController
         Jasa::where('uuid', $params)->delete();
         return response()->json(['status' => 'success']);
     }
+
+    public function getJasaList()
+    {
+        return response()->json(Jasa::select('uuid', 'nama', 'harga')->get());
+    }
 }

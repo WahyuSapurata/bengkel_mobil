@@ -72,6 +72,10 @@
         <p><strong>TANGGAL :</strong> {{ $tanggal }}</p>
         <p><strong>Penjualan Hari Ini :</strong></p>
 
+        @php
+            $target = 1500000; // Target harian
+        @endphp
+
         <table>
             <thead>
                 <tr>
@@ -106,7 +110,6 @@
                         $grandNonTunai += $row['non_tunai'];
                         $grandTotal += $row['total'];
                         $grandProfit += $row['profit'];
-                        $target = 1500000; // Target harian
                     @endphp
                 @endforeach
 

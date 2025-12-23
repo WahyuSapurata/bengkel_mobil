@@ -1,5 +1,7 @@
 <?php
 
+use App\Http\Controllers\CostumerController;
+use App\Http\Controllers\ProdukController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
@@ -17,3 +19,10 @@ use Illuminate\Support\Facades\Route;
 Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
     return $request->user();
 });
+
+Route::get('/boot/kategori', [ProdukController::class, 'getKategori']);
+Route::get('/boot/produk/{params}', [ProdukController::class, 'getProdukByKategori']);
+
+Route::get('/boot/jasa', [App\Http\Controllers\JasaController::class, 'getJasaList']);
+
+Route::get('/boot/costumer/{plat}', [CostumerController::class, 'getCostumerByPlatBoot']);
