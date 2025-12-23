@@ -9,11 +9,9 @@ let greetedUsers = new Set();
 let userOutletMap = new Map();
 
 const client = new Client({
-    authStrategy: new LocalAuth({
-        clientId: "MotoCore-bot"
-    }),
+    authStrategy: new LocalAuth(),
     puppeteer: {
-        headless: 'new',
+        headless: true,
         executablePath: '/usr/bin/google-chrome',
         args: [
             '--no-sandbox',
