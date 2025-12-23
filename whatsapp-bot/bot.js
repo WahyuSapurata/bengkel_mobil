@@ -13,20 +13,18 @@ const client = new Client({
         clientId: "MotoCore-bot"
     }),
     puppeteer: {
-        headless: "new", // 🔥 WAJIB (jangan true)
+        headless: "new",
         executablePath: "/usr/bin/google-chrome",
         args: [
             "--no-sandbox",
             "--disable-setuid-sandbox",
             "--disable-dev-shm-usage",
             "--disable-gpu",
-            "--disable-software-rasterizer",
-            "--disable-features=IsolateOrigins,site-per-process",
+            "--no-zygote",
             "--single-process"
         ]
     }
 });
-
 
 client.on('qr', qr => {
     qrcode.generate(qr, { small: true });
