@@ -10,7 +10,7 @@ let userOutletMap = new Map();
 
 const client = new Client({
     authStrategy: new LocalAuth({
-        clientId: 'MotoCore-bot'
+        clientId: "MotoCore-bot"
     }),
     puppeteer: {
         headless: 'new',
@@ -21,6 +21,8 @@ const client = new Client({
             '--disable-dev-shm-usage',
             '--disable-gpu',
             '--disable-software-rasterizer',
+            '--disable-features=site-per-process',
+            '--no-first-run',
             '--no-zygote',
             '--single-process'
         ]
