@@ -148,13 +148,18 @@ client.on('message', async msg => {
             if (text === "5") {
                 userState[user] = "ULASAN";
                 await msg.reply(
-                    `⭐ *Ulasan Layanan*
+                    `⭐ *ULASAN LAYANAN ADS MOTOR* ⭐
 
-5️⃣ Sangat Puas
-4️⃣ Puas
-3️⃣ Cukup
-2️⃣ Kurang
-1️⃣ Buruk`
+Kami ingin mendengar pengalaman Anda 🙏
+Silakan pilih penilaian:
+
+5️⃣ ⭐⭐⭐⭐⭐ Sangat Puas
+4️⃣ ⭐⭐⭐⭐ Puas
+3️⃣ ⭐⭐⭐ Cukup
+2️⃣ ⭐⭐ Kurang
+1️⃣ ⭐ Buruk
+
+Ketik angka *1–5*`
                 );
                 return;
             }
@@ -268,15 +273,42 @@ client.on('message', async msg => {
         }
 
         /* ================= ULASAN ================= */
-        if (userState[user] === "ULASAN" && ["1", "2", "3", "4", "5"].includes(text)) {
+        if (
+            userState[user] === "ULASAN" &&
+            ["1", "2", "3", "4", "5"].includes(text)
+        ) {
+            const ratingText = {
+                "5": "⭐⭐⭐⭐⭐ Sangat Puas",
+                "4": "⭐⭐⭐⭐ Puas",
+                "3": "⭐⭐⭐ Cukup",
+                "2": "⭐⭐ Kurang",
+                "1": "⭐ Buruk"
+            };
+
             userState[user] = "ULASAN_KOMENTAR";
-            await msg.reply("🙏 Terima kasih! Silakan tulis komentar Anda.");
+
+            await msg.reply(
+                `🙏 *Terima kasih atas penilaian Anda!*
+
+Rating Anda: *${ratingText[text]}*
+
+✍️ Silakan tuliskan komentar atau saran Anda
+agar kami bisa menjadi lebih baik.`
+            );
             return;
         }
 
         if (userState[user] === "ULASAN_KOMENTAR") {
             userState[user] = "MENU";
-            await msg.reply("✅ Terima kasih atas ulasan Anda!\n9️⃣ Menu Utama");
+
+            await msg.reply(
+                `✅ *Ulasan berhasil dikirim!*
+
+Terima kasih sudah meluangkan waktu 🙏
+Masukan Anda sangat berarti bagi kami.
+
+9️⃣ Menu Utama`
+            );
             return;
         }
 
