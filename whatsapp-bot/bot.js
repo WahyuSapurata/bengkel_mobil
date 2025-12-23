@@ -10,20 +10,17 @@ let userOutletMap = new Map();
 
 const client = new Client({
     authStrategy: new LocalAuth({
-        clientId: 'MotoCore-bot'
+        clientId: "MotoCore-bot"
     }),
     puppeteer: {
-        headless: 'new', // ⬅️ penting
-        executablePath: '/usr/bin/google-chrome',
+        headless: 'new',
         args: [
             '--no-sandbox',
             '--disable-setuid-sandbox',
             '--disable-dev-shm-usage',
             '--disable-gpu',
             '--disable-software-rasterizer',
-            '--no-zygote',
-            '--single-process'
-        ]
+        ],
     }
 });
 
