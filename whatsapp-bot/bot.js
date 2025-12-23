@@ -20,7 +20,6 @@ const client = new Client({
             '--disable-setuid-sandbox',
             '--disable-dev-shm-usage',
             '--disable-gpu',
-            '--no-zygote',
             '--single-process'
         ]
     }
