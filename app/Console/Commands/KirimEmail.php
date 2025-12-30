@@ -30,7 +30,7 @@ class KirimEmail extends Command
     public function handle()
     {
         // $tanggalHariIni = Carbon::now()->format('d-m-Y');
-        $tanggalHariIni = "28-12-2025";
+        $tanggalHariIni = "29-12-2025";
         // $emailTujuan = 'wm337708@gmail.com';
         $emailTujuan = 'mmmaeroautomotive@gmail.com';
 
