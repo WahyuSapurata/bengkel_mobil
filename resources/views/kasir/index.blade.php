@@ -142,8 +142,12 @@
                                 </label>
                             </div>
 
+                            <input type="text" id="search-jasa" class="form-control form-control-sm mb-2 d-none"
+                                placeholder="Cari jasa...">
+
                             <div id="list-jasa" class="d-none list-jasa-scroll">
                                 <!-- List jasa akan dimasukkan di sini -->
+
                             </div>
                         </div>
 
@@ -406,6 +410,8 @@
             let checkJasa = document.getElementById("check-jasa");
             let selectJasa = document.getElementById("select-jasa");
             const listJasa = document.getElementById("list-jasa");
+            let jasaData = [];
+            const searchJasa = document.getElementById("search-jasa");
 
             let selectedJasa = []; // array untuk menyimpan jasa yang dipilih
             let totalJasa = 0;
@@ -638,9 +644,12 @@
             checkJasa.addEventListener("change", function() {
                 if (this.checked) {
                     listJasa.classList.remove("d-none");
+                    searchJasa.classList.remove("d-none");
                     loadJasa();
                 } else {
                     listJasa.classList.add("d-none");
+                    searchJasa.classList.add("d-none");
+                    searchJasa.value = ""; // reset search
                     listJasa.innerHTML = "";
                     selectedJasa = [];
                     jasaDiscount = "0";
@@ -653,72 +662,82 @@
                 fetch("/kasir/get-jasa")
                     .then(res => res.json())
                     .then(data => {
-                        listJasa.innerHTML = "";
-                        selectedJasa = []; // reset
-
-                        data.forEach(jasa => {
-                            const div = document.createElement("div");
-                            div.classList.add("d-flex", "align-items-center", "justify-content-between",
-                                "mb-2");
-
-                            div.innerHTML = `
-                                <span class="me-2" style="min-width:100px; width: 150px;">${jasa.nama}</span>
-                                <div class="">
-                                    <button type="button"
-                                    class="btn btn-sm btn-success me-2 add-jasa"
-                                    data-uuid="${jasa.uuid}"
-                                    data-harga="${jasa.harga}">
-                                    +
-                                    </button>
-                                    <button type="button"
-                                        class="btn btn-sm btn-danger me-2 remove-jasa"
-                                        data-uuid="${jasa.uuid}"
-                                        data-harga="${jasa.harga}">
-                                        -
-                                    </button>
-                                    <div class="btn btn-sm btn-info jumlah-jasa" data-uuid="${jasa.uuid}">
-                                        = 0
-                                    </div>
-                                </div>
-                            `;
-
-                            listJasa.appendChild(div);
-                        });
-
-                        // tombol tambah jasa
-                        document.querySelectorAll(".add-jasa").forEach(btn => {
-                            btn.addEventListener("click", function() {
-                                const uuid = this.dataset.uuid;
-                                const harga = parseInt(this.dataset.harga);
-
-                                selectedJasa.push({
-                                    uuid,
-                                    harga
-                                });
-
-                                updateJumlah(uuid); // update tampilan jumlah
-                                updateTotal();
-                            });
-                        });
-
-                        // tombol kurang jasa
-                        document.querySelectorAll(".remove-jasa").forEach(btn => {
-                            btn.addEventListener("click", function() {
-                                const uuid = this.dataset.uuid;
-
-                                // hapus hanya 1 kemunculan pertama dari UUID yang sama
-                                const index = selectedJasa.findIndex(j => j.uuid === uuid);
-                                if (index !== -1) {
-                                    selectedJasa.splice(index, 1);
-                                }
-
-                                updateJumlah(uuid); // update tampilan jumlah
-                                updateTotal();
-                            });
-                        });
+                        jasaData = data; // ⬅ simpan data asli
+                        renderJasa(data);
                     })
                     .catch(err => console.error("❌ Error load jasa:", err));
             }
+
+            function renderJasa(data) {
+                listJasa.innerHTML = "";
+
+                data.forEach(jasa => {
+                    const div = document.createElement("div");
+                    div.classList.add(
+                        "d-flex",
+                        "align-items-center",
+                        "justify-content-between",
+                        "mb-2"
+                    );
+
+                    div.innerHTML = `
+            <span class="me-2" style="min-width:100px; width: 150px;">${jasa.nama}</span>
+            <div>
+                <button type="button"
+                    class="btn btn-sm btn-success me-2 add-jasa"
+                    data-uuid="${jasa.uuid}"
+                    data-harga="${jasa.harga}">+</button>
+
+                <button type="button"
+                    class="btn btn-sm btn-danger me-2 remove-jasa"
+                    data-uuid="${jasa.uuid}"
+                    data-harga="${jasa.harga}">-</button>
+
+                <div class="btn btn-sm btn-info jumlah-jasa"
+                    data-uuid="${jasa.uuid}">= 0</div>
+            </div>
+        `;
+
+                    listJasa.appendChild(div);
+                });
+
+                // tombol tambah jasa (ASLI, TIDAK DIUBAH)
+                document.querySelectorAll(".add-jasa").forEach(btn => {
+                    btn.addEventListener("click", function() {
+                        const uuid = this.dataset.uuid;
+                        const harga = parseInt(this.dataset.harga);
+
+                        selectedJasa.push({
+                            uuid,
+                            harga
+                        });
+                        updateJumlah(uuid);
+                        updateTotal();
+                    });
+                });
+
+                // tombol kurang jasa (ASLI, TIDAK DIUBAH)
+                document.querySelectorAll(".remove-jasa").forEach(btn => {
+                    btn.addEventListener("click", function() {
+                        const uuid = this.dataset.uuid;
+                        const index = selectedJasa.findIndex(j => j.uuid === uuid);
+                        if (index !== -1) selectedJasa.splice(index, 1);
+
+                        updateJumlah(uuid);
+                        updateTotal();
+                    });
+                });
+            }
+
+            document.getElementById("search-jasa").addEventListener("keyup", function() {
+                const keyword = this.value.toLowerCase();
+
+                const filtered = jasaData.filter(jasa =>
+                    jasa.nama.toLowerCase().includes(keyword)
+                );
+
+                renderJasa(filtered);
+            });
 
             function updateJumlah(uuid) {
                 const jumlahEl = listJasa.querySelector(`.jumlah-jasa[data-uuid="${uuid}"]`);
