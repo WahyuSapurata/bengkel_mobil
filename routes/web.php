@@ -164,7 +164,8 @@ Route::group([
 
         Route::get('/vw-lap-transaksi', [App\Http\Controllers\LapTransakasi::class, 'index'])->name('vw-lap-transaksi');
         Route::get('/get-lap-transaksi', [App\Http\Controllers\LapTransakasi::class, 'get'])->name('get-lap-transaksi');
-        // Route::get('/export-excel/{params?}', [App\Http\Controllers\LapTransakasi::class, 'export_excel'])->name('export-excel');
+        Route::get('/export-excel/{params?}', [App\Http\Controllers\LapTransakasi::class, 'export_excel'])->name('export-excel');
+        Route::get('/detail-penjualan/{params}', [App\Http\Controllers\LapTransakasi::class, 'detail'])->name('detail-penjualan');
     });
 
     Route::get('sumary-report', [App\Http\Controllers\ClosingKasirController::class, 'sumaryreport'])->name('sumary-report');
