@@ -159,7 +159,7 @@ class LapTransakasi extends BaseController
         ]);
     }
 
-   public function detail($params)
+    public function detail($params)
     {
         // ============================
         // DETAIL PRODUK
@@ -200,7 +200,7 @@ class LapTransakasi extends BaseController
         $spreadsheet = new Spreadsheet();
         $sheet = $spreadsheet->getActiveSheet();
 
-        // ===== Header =====
+        // ===== Header (disesuaikan dengan data yang dipakai) =====
         $headers = [
             'A1' => 'Tanggal',
             'B1' => 'No Bukti',
@@ -210,8 +210,12 @@ class LapTransakasi extends BaseController
             'F1' => 'Sub Kategori',
             'G1' => 'Suplier',
             'H1' => 'Qty',
-            'I1' => 'Total Harga',
+            'I1' => 'Total Produk',
+            'J1' => 'Nama Jasa',
+            'K1' => 'Harga Jasa',
+            'L1' => 'Total Produk + Jasa',
         ];
+
         foreach ($headers as $col => $text) {
             $sheet->setCellValue($col, $text);
         }
@@ -220,15 +224,14 @@ class LapTransakasi extends BaseController
         $start = $request->tanggal_awal;
         $end   = $request->tanggal_akhir;
 
-        // Konversi tanggal dari d-m-Y ke Y-m-d
         if ($start && $end) {
             $start = Carbon::createFromFormat('d-m-Y', $start)->format('Y-m-d');
             $end   = Carbon::createFromFormat('d-m-Y', $end)->format('Y-m-d');
         }
 
         /* ===========================
-   DETAIL PRODUK
-=========================== */
+       DETAIL PRODUK
+    =========================== */
         $produkDetails = DB::table('detail_penjualans as dp')
             ->join('penjualans as p', 'dp.uuid_penjualans', '=', 'p.uuid')
             ->join('produks as pr', 'dp.uuid_produk', '=', 'pr.uuid')
@@ -259,31 +262,59 @@ class LapTransakasi extends BaseController
             );
         }
 
+        $jasaPerPenjualan = DB::table('penjualans')
+            ->leftJoin(DB::raw("
+        JSON_TABLE(
+            penjualans.uuid_jasa,
+            '$[*]' COLUMNS (
+                uuid_jasa VARCHAR(255) PATH '$'
+            )
+        ) jt
+    "), DB::raw('1'), '=', DB::raw('1'))
+            ->leftJoin('jasas', 'jasas.uuid', '=', 'jt.uuid_jasa')
+            ->select(
+                'penjualans.no_bukti',
+                DB::raw('GROUP_CONCAT(jasas.nama SEPARATOR ", ") AS nama_jasa'),
+                DB::raw('SUM(jasas.harga) AS total_jasa')
+            )
+            ->groupBy('penjualans.no_bukti')
+            ->get()
+            ->keyBy('no_bukti');
+
+
         /* ===========================
-   GABUNGKAN & SORT
-=========================== */
+       GABUNGKAN & SORT
+    =========================== */
         $allDetails = $produkDetails->get();
 
-        // Sort by tanggal terbaru
+        // SORT: tanggal DESC, no_bukti DESC
         $allDetails = $allDetails->sort(function ($a, $b) {
-
-            // 1. SORT TANGGAL DESC
             $dateA = Carbon::createFromFormat('d-m-Y', $a->tanggal_transaksi);
             $dateB = Carbon::createFromFormat('d-m-Y', $b->tanggal_transaksi);
 
             if ($dateA->eq($dateB)) {
-                // 2. Kalau tanggal sama → SORT NO BUKTI ASC
                 return strcmp($b->no_bukti, $a->no_bukti);
             }
 
-            // tanggal DESC (baru di atas)
             return $dateB <=> $dateA;
         })->values();
 
         // ===== Isi Excel =====
+        $lastNoBukti = null;
         $row = 2;
         foreach ($allDetails as $d) {
-            $sheet->setCellValue('A' . $row, Carbon::createFromFormat('d-m-Y', $d->tanggal_transaksi)->format('d-m-Y'));
+
+            $isFirstRow = $lastNoBukti !== $d->no_bukti;
+
+            $jasa = $isFirstRow
+                ? ($jasaPerPenjualan[$d->no_bukti] ?? null)
+                : null;
+
+            $totalJasa  = $isFirstRow ? ($jasa->total_jasa ?? 0) : 0;
+            $namaJasa   = $isFirstRow ? ($jasa->nama_jasa ?? '-') : '-';
+            $totalAkhir = $d->total_harga + $totalJasa;
+
+            $sheet->setCellValue('A' . $row, $d->tanggal_transaksi);
             $sheet->setCellValue('B' . $row, $d->no_bukti);
             $sheet->setCellValue('C' . $row, $d->nama_barang);
             $sheet->setCellValue('D' . $row, $d->merek);
@@ -292,78 +323,71 @@ class LapTransakasi extends BaseController
             $sheet->setCellValue('G' . $row, $d->nama_suplier);
             $sheet->setCellValue('H' . $row, $d->qty);
             $sheet->setCellValue('I' . $row, $d->total_harga);
+            $sheet->setCellValue('J' . $row, $namaJasa);
+            $sheet->setCellValue('K' . $row, $totalJasa);
+            $sheet->setCellValue('L' . $row, $totalAkhir);
 
-            $sheet->getStyle('I' . $row)
-                ->getNumberFormat()
-                ->setFormatCode('"Rp" #,##0');
+            foreach (['I', 'K', 'L'] as $col) {
+                $sheet->getStyle($col . $row)
+                    ->getNumberFormat()
+                    ->setFormatCode('"Rp" #,##0');
+            }
 
+            $lastNoBukti = $d->no_bukti;
             $row++;
         }
 
-        // Auto width
-        foreach (range('A', 'H') as $col) {
+        // Auto width (sampai kolom I)
+        foreach (range('A', 'L') as $col) {
             $sheet->getColumnDimension($col)->setAutoSize(true);
         }
 
-        // Total
-        $sheet->mergeCells('A' . $row . ':H' . $row);
-        $sheet->setCellValue('A' . $row, 'TOTAL');
-        $sheet->setCellValue('I' . $row, '=SUM(I2:I' . ($row - 1) . ')');
+        // ===== TOTAL =====
+        $sheet->mergeCells("A{$row}:K{$row}");
+        $sheet->setCellValue("A{$row}", 'TOTAL');
+        $sheet->setCellValue("L{$row}", "=SUM(L2:L" . ($row - 1) . ")");
 
-        $sheet->getStyle('A' . $row . ':I' . $row)
+        $sheet->getStyle("L{$row}")
             ->getNumberFormat()
             ->setFormatCode('"Rp" #,##0');
 
-        // Style Header
-        $headerStyle = [
-            'font' => [
-                'bold' => true,
-                'color' => ['rgb' => 'FFFFFF']
-            ],
+        // ===== Style Header =====
+        $sheet->getStyle('A1:L1')->applyFromArray([
+            'font' => ['bold' => true, 'color' => ['rgb' => 'FFFFFF']],
             'alignment' => [
                 'horizontal' => \PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER,
                 'vertical'   => \PhpOffice\PhpSpreadsheet\Style\Alignment::VERTICAL_CENTER,
             ],
             'fill' => [
                 'fillType' => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID,
-                'color' => ['rgb' => '4F81BD'] // biru
-            ],
-            'borders' => [
-                'allBorders' => [
-                    'borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN,
-                    'color' => ['rgb' => '000000']
-                ]
-            ]
-        ];
-
-        $sheet->getStyle('A1:I1')->applyFromArray($headerStyle);
-
-        // Style Footer Total
-        $footerStyle = [
-            'font' => ['bold' => true],
-            'fill' => [
-                'fillType' => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID,
-                'color' => ['rgb' => 'D9D9D9'] // abu
+                'color' => ['rgb' => '4F81BD']
             ],
             'borders' => [
                 'allBorders' => [
                     'borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN
                 ]
             ]
-        ];
+        ]);
 
-        $sheet->getStyle("A{$row}:I{$row}")->applyFromArray($footerStyle);
-
-        $dataLastRow = $row - 1;
-
-        $sheet->getStyle("A2:I{$dataLastRow}")
-            ->applyFromArray([
-                'borders' => [
-                    'allBorders' => [
-                        'borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN
-                    ]
+        // ===== Style Footer =====
+        $sheet->getStyle("A{$row}:L{$row}")->applyFromArray([
+            'font' => ['bold' => true],
+            'fill' => [
+                'fillType' => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID,
+                'color' => ['rgb' => 'D9D9D9']
+            ],
+            'borders' => [
+                'allBorders' => [
+                    'borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN
                 ]
-            ]);
+            ]
+        ]);
+
+        // Border data
+        $sheet->getStyle("A2:L" . ($row - 1))
+            ->getBorders()
+            ->getAllBorders()
+            ->setBorderStyle(\PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN);
 
         // Download
         $fileName = 'penjualan-export.xlsx';
